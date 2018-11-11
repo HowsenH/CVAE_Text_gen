@@ -21,11 +21,14 @@ parser.add_argument('--save_iter', type=int, default=10)
 parser.add_argument('--log_iter', type=int, default=5)
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--embedding', type=str, default='glove.6B.300d')
-parser.add_argument('--mode', type=str, default='train')
+parser.add_argument('--mode', type=str, default='test')
 parser.add_argument('--rec_coef', type=float, default=7)
 parser.add_argument('--n_highway_layers', type=int, default=2)
 parser.add_argument('--n_layers_G', type=int, default=2)
 parser.add_argument('--dataset', type=str, default='pitchfork')
+parser.add_argument('--eval_model', type=str, default='CVAE20181111-001424')
+parser.add_argument('--eval_model_iter', type=int, default=100)
+parser.add_argument('--mask_prob', type=float, default=0.05)
 
 opt = parser.parse_args()
 
@@ -62,9 +65,10 @@ if opt.mode == 'train':
           start_time=start_time,
           iter_max=opt.max_iter,
           iter_log=opt.log_iter,
-          iter_save=opt.save_iter)
+          iter_save=opt.save_iter,
+          mask_prob=opt.mask_prob)
 elif opt.mode == 'test':
-    ut.load_model_by_name(model, global_step=opt.max_iter)
+    ut.load_model_by_name(model, opt.eval_model, global_step=opt.eval_model_iter)
     generated_list = model.generate_samples(opt, vocab)
     for sentence in generated_list:
         print(sentence)

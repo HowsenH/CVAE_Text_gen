@@ -1,9 +1,11 @@
 import numpy as np
 import utils as ut
 from torch import nn, optim
+import torch as T
 
 def train(model, data_loader, tqdm, device, writer, start_time,
-          iter_max=np.inf, iter_save=np.inf, iter_log=50, reinitialize=False):
+          iter_max=np.inf, iter_save=np.inf, iter_log=50, reinitialize=False,
+          mask_prob = 0.0):
     # Optimization
     if reinitialize:
         try:
@@ -21,6 +23,8 @@ def train(model, data_loader, tqdm, device, writer, start_time,
                 xu = xu.to(device).reshape(xu.size(0), -1)
                 yu = yu.to(device).reshape(xu.size(0), -1)
                 G_inp = xu[:, 0:xu.size(1) - 1].clone()
+                mask = (T.rand(G_inp.shape).to(device) > mask_prob).long()
+                G_inp = G_inp * mask
                 loss, summaries = model.loss(xu, yu, G_inp, i)
 
                 loss.backward()

@@ -4,9 +4,9 @@ import torch
 import datetime
 import tensorflow as tf
 
-def load_model_by_name(model, global_step):
+def load_model_by_name(model, model_path, global_step):
     file_path = os.path.join('checkpoints',
-                             "CVAE",
+                             model_path,
                              'model-{:05d}.pt'.format(global_step))
     state = torch.load(file_path)
     model.load_state_dict(state)
