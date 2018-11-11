@@ -2,8 +2,8 @@ import numpy as np
 import utils as ut
 from torch import nn, optim
 
-def train(model, data_loader, tqdm, device, writer,
-          iter_max=np.inf, iter_save=np.inf, reinitialize=False):
+def train(model, data_loader, tqdm, device, writer, start_time,
+          iter_max=np.inf, iter_save=np.inf, iter_log=50, reinitialize=False):
     # Optimization
     if reinitialize:
         try:
@@ -32,11 +32,11 @@ def train(model, data_loader, tqdm, device, writer,
                 pbar.update(1)
 
                 # Log summaries
-                if i % 50 == 0: ut.log_summaries(writer, summaries, i)
+                if i % iter_log == 0: ut.log_summaries(writer, summaries, i)
 
                 # Save model
                 if i % iter_save == 0:
-                    ut.save_model_by_name(model, i)
+                    ut.save_model_by_name(model, start_time, i)
 
                 if i == iter_max:
                     return

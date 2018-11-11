@@ -103,4 +103,5 @@ def make_loader(data_iter, opt):
             yield data.text, label
         elif opt.dataset == 'imdb':
             raise NotImplementedError
-        raise AttributeError
+        else:
+            raise AttributeError

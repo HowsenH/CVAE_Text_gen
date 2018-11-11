@@ -6,6 +6,7 @@ import argparse
 import torch as T
 import tqdm
 import utils as ut
+from datetime import datetime
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=512)
@@ -14,9 +15,10 @@ parser.add_argument('--max_words', type=int, default=20000)
 parser.add_argument('--emb_size', type=int, default=300)
 parser.add_argument('--z_dim', type=int, default=512)
 parser.add_argument('--n_z', type=int, default=100)
-parser.add_argument('--max_len', type=int, default=30)
-parser.add_argument('--max_iter', type=int, default=100000)
-parser.add_argument('--save_iter', type=int, default=5000)
+parser.add_argument('--max_len', type=int, default=20)
+parser.add_argument('--max_iter', type=int, default=100)
+parser.add_argument('--save_iter', type=int, default=10)
+parser.add_argument('--log_iter', type=int, default=5)
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--embedding', type=str, default='glove.6B.300d')
 parser.add_argument('--mode', type=str, default='train')
@@ -35,10 +37,13 @@ train_data, val_data, vocab = mydataset.make_dataset(raw_data, opt)
 train_iter, val_iter = mydataset.make_iterator((train_data, val_data), opt)
 device = T.device(opt.device)
 
+start_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+
 layout = [
     ('model={:s}',  'cvae'),
     ('z={:02d}',  opt.z_dim),
-    ('run={:04d}', opt.max_iter)
+    ('run={:04d}', opt.max_iter),
+    ('time={:s}', start_time)
 ]
 model_name = '_'.join([t.format(v) for (t, v) in layout])
 writer = ut.prepare_writer(model_name, overwrite_existing=True)
@@ -54,7 +59,9 @@ if opt.mode == 'train':
           tqdm=tqdm.tqdm,
           device=device,
           writer=writer,
+          start_time=start_time,
           iter_max=opt.max_iter,
+          iter_log=opt.log_iter,
           iter_save=opt.save_iter)
 elif opt.mode == 'test':
     ut.load_model_by_name(model, global_step=opt.max_iter)
