@@ -21,7 +21,7 @@ def train(model, data_loader, tqdm, device, writer,
                 xu = xu.to(device).reshape(xu.size(0), -1)
                 yu = yu.to(device).reshape(xu.size(0), -1)
                 # G_inp = xu[:, 0:xu.size(1) - 1].clone()
-                loss, summaries = model.loss(xu, yu, xu, i)
+                loss, summaries = model.loss(xu, yu, i)
 
                 loss.backward()
                 optimizer.step()
