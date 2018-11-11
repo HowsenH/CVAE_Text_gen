@@ -3,7 +3,7 @@ import utils as ut
 from torch import nn, optim
 
 def train(model, data_loader, tqdm, device, writer,
-          iter_max=np.inf, iter_save=np.inf, reinitialize=False):
+          iter_max=np.inf, iter_save=np.inf, iter_log=50, reinitialize=False):
     # Optimization
     if reinitialize:
         try:
@@ -20,8 +20,8 @@ def train(model, data_loader, tqdm, device, writer,
 
                 xu = xu.to(device).reshape(xu.size(0), -1)
                 yu = yu.to(device).reshape(xu.size(0), -1)
-                G_inp = xu[:, 0:xu.size(1) - 1].clone()
-                loss, summaries = model.loss(xu, yu, G_inp, i)
+                # G_inp = xu[:, 0:xu.size(1) - 1].clone()
+                loss, summaries = model.loss(xu, yu, xu, i)
 
                 loss.backward()
                 optimizer.step()
@@ -32,7 +32,7 @@ def train(model, data_loader, tqdm, device, writer,
                 pbar.update(1)
 
                 # Log summaries
-                if i % 50 == 0: ut.log_summaries(writer, summaries, i)
+                if i % iter_log == 0: ut.log_summaries(writer, summaries, i)
 
                 # Save model
                 if i % iter_save == 0:

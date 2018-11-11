@@ -2,6 +2,7 @@ import os
 import shutil
 import torch
 import datetime
+import tensorflow as tf
 
 def load_model_by_name(model, global_step):
     file_path = os.path.join('checkpoints',
@@ -12,7 +13,7 @@ def load_model_by_name(model, global_step):
     print("Loaded from {}".format(file_path))
 
 def save_model_by_name(model, global_step):
-    save_dir = os.path.join('checkpoints', "CVAE" + str(datetime.datetime.now()).replace(" ", "_"))
+    save_dir = os.path.join('checkpoints', "CVAE" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     file_path = os.path.join(save_dir, 'model-{:05d}.pt'.format(global_step))
@@ -27,10 +28,17 @@ def prepare_writer(model_name, overwrite_existing=False):
     if overwrite_existing:
         delete_existing(log_dir)
         delete_existing(save_dir)
-    writer = None
+    writer = tf.summary.FileWriter(log_dir)
     return writer
 
 def delete_existing(path):
     if os.path.exists(path):
         print("Deleting existing path: {}".format(path))
         shutil.rmtree(path)
+
+def log_summaries(writer, summaries, global_step):
+    for tag in summaries:
+        val = summaries[tag]
+        tf_summary = tf.Summary.Value(tag=tag, simple_value=val.cpu().data.numpy().item())
+        writer.add_summary(tf.Summary(value=[tf_summary]), global_step)
+    writer.flush()

@@ -65,10 +65,7 @@ class Generator(nn.Module):
     def forward(self, x, y, z, g_hidden = None, test_phase = False):
         batch_size, n_seq, n_embed = x.size()
         z = T.cat([z]*n_seq, 1).view(batch_size, n_seq, self.n_z)	#Replicate z inorder to append same z at each time step
-        if test_phase:
-            x = T.cat([x, y, z], dim=2)
-        else:
-            x = T.cat([x,y[:, :-1, :],z], dim=2)	                                    #Append z to generator word input at each time step
+        x = T.cat([x, y, z], dim=2)
 
         if g_hidden is None:	                                    #if we are validating
             self.init_hidden(batch_size)
@@ -116,7 +113,7 @@ class CVAE(nn.Module):
     def loss(self, x, y, G_inp, cur_step = 0):
         logit, _, kld = self.forward(x, y, G_inp, None, None)
         logit = logit.view(-1, self.opt.max_words + 4)  # converting into shape (batch_size*(n_seq-1), n_vocab) to facilitate performing F.cross_entropy()
-        x = x[:, 1:x.size(1)]  # target for generator should exclude first word of sequence
+        # x = x[:, 1:x.size(1)]  # target for generator should exclude first word of sequence
         x = x.contiguous().view(-1)  # converting into shape (batch_size*(n_seq-1),1) to facilitate performing F.cross_entropy()
         rec_loss = F.cross_entropy(logit, x)
         kld_coef = (math.tanh((cur_step - 15000) / 1000) + math.pi / 2) / 2
