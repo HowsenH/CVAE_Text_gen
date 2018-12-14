@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import numpy as np
+from tqdm import tqdm
 
 class Highway(nn.Module):
     def __init__(self, opt):
@@ -25,7 +26,7 @@ class Encoder(nn.Module):
     def __init__(self, opt):
         super(Encoder, self).__init__()
         self.highway = Highway(opt)
-        self.fc = nn.Linear(opt.emb_size + opt.label_cats + 1, opt.emb_size)
+        self.fc = nn.Linear(opt.feature_dim, opt.emb_size)
         self.n_hidden_E = opt.z_dim
         self.n_layers_E = 1
         self.lstm = nn.LSTM(input_size=opt.emb_size, hidden_size=self.n_hidden_E, num_layers=self.n_layers_E, batch_first=True, bidirectional=True)
@@ -52,7 +53,7 @@ class Generator(nn.Module):
         self.n_hidden_G = opt.z_dim
         self.n_layers_G = opt.n_layers_G
         self.n_z = opt.n_z
-        self.lstm = nn.LSTM(input_size=opt.emb_size+opt.n_z+opt.label_cats+1,
+        self.lstm = nn.LSTM(input_size=opt.feature_dim + self.n_z,
                             hidden_size=self.n_hidden_G, num_layers=self.n_layers_G, batch_first=True)
         self.fc = nn.Linear(self.n_hidden_G, opt.max_words + 4)
         self.device = T.device(opt.device)
@@ -113,38 +114,49 @@ class CVAE(nn.Module):
         logit, G_hidden = self.generator(G_inp, y, z, G_hidden, test_phase=test_phase)
         return logit, G_hidden, kld
 
-    def loss(self, x, y, G_inp, cur_step = 0):
+    def loss(self, x, y, G_inp, cur_step = 0, is_train=True):
         logit, _, kld = self.forward(x, y, G_inp, None, None)
         logit = logit.view(-1, self.opt.max_words + 4)  # converting into shape (batch_size*(n_seq-1), n_vocab) to facilitate performing F.cross_entropy()
         x = x[:, 1:x.size(1)]  # target for generator should exclude first word of sequence
         x = x.contiguous().view(-1)  # converting into shape (batch_size*(n_seq-1),1) to facilitate performing F.cross_entropy()
         rec_loss = F.cross_entropy(logit, x)
-        kld_coef = (math.tanh((cur_step - 15000) / 1000) + math.pi / 2) / 2
+        kld_coef = (math.tanh((cur_step - 15000) / 1000) + 1) / 2
         loss = self.opt.rec_coef * rec_loss + kld_coef * kld
 
+        prefix = "train" if is_train else "test"
         summaries = dict((
-            ('train/loss', loss),
-            ('gen/elbo', -(rec_loss + kld)),
-            ('gen/kl_z', kld),
-            ('gen/rec', rec_loss),
+            ('%s/loss' % prefix, loss),
+            ('%s/elbo' % prefix, -(rec_loss + kld)),
+            ('%s/kl_z' % prefix, kld),
+            ('%s/rec' % prefix, rec_loss),
         ))
 
         return loss, summaries
 
-    def generate_samples(self, opt, vocab, samples = 10):
+    def generate_samples(self, opt, vocab, samples = 10, max_len = 100):
         device = T.device(opt.device)
         str_list = []
         for i in range(samples):
-            self.eval()
             z = T.randn([1, opt.n_z]).to(device)
             h_0 = T.zeros(opt.n_layers_G, 1, opt.z_dim).to(device)
             c_0 = T.zeros(opt.n_layers_G, 1, opt.z_dim).to(device)
             G_hidden = (h_0, c_0)
             G_inp = T.LongTensor(1, 1).fill_(vocab.stoi['<sos>']).to(device)
             str = "<sos> "
-            features = np.concatenate((np.eye(10), np.repeat([9], 10).reshape((-1, 1))), axis=1)[i].reshape((1, 1, 11))
+            if opt.dataset == 'pitchfork':
+                features = np.concatenate((np.eye(10), np.repeat([5], 10).reshape((-1, 1))), axis=1)[i % 10].reshape((1, 1, -1))
+            elif opt.dataset == 'sentiment':
+                features = np.array(5).reshape((1, 1, 1))
+            elif opt.dataset == "amazon":
+                features = np.concatenate((np.eye(5), np.repeat([1], 5).reshape((-1, 1))), axis=1)[i % 5].reshape((1, 1, -1))
+            else:
+                raise AttributeError
             features = T.from_numpy(features.astype(np.float32)).to(device)
+            word_count = 0
             while G_inp[0][0].item() != vocab.stoi['<eos>']:
+                if word_count > max_len:
+                    break
+                word_count += 1
                 with T.autograd.no_grad():
                     logit, G_hidden, _ = self.forward(None, features, G_inp, z, G_hidden, test_phase=True)
                 probs = F.softmax(logit[0], dim=1)
@@ -154,3 +166,15 @@ class CVAE(nn.Module):
                 str += (vocab.itos[G_inp[0][0].item()] + " ")
             str_list.append(str.encode('utf-8'))
         return str_list
+
+    def encode(self, x, y):
+        batch_size, n_seq = x.size()
+        x = self.embedding(x)	                                    #Produce embeddings from encoder input
+        y = y.unsqueeze(1).expand(-1, x.shape[1], y.shape[1])
+        E_hidden = self.encoder(x, y)	                            #Get h_T of Encoder
+        mu = self.hidden_to_mu(E_hidden)	                        #Get mean of lantent z
+        logvar = self.hidden_to_logvar(E_hidden)	                #Get log variance of latent z
+        z = T.randn([batch_size, self.n_z]).to(self.device)         #Noise sampled from ε ~ Normal(0,1)
+        z = mu + z*T.exp(0.5*logvar)	                            #Reparameterization trick: Sample z = μ + ε*σ for backpropogation
+        return z
+
