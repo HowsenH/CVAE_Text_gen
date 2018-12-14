@@ -63,13 +63,10 @@ class Generator(nn.Module):
         c_0 = T.zeros(self.n_layers_G, batch_size, self.n_hidden_G).to(self.device)
         self.hidden = (h_0, c_0)
 
-    def forward(self, x, y, z, g_hidden = None, test_phase = False):
+    def forward(self, x, y, z, g_hidden = None):
         batch_size, n_seq, n_embed = x.size()
         z = T.cat([z]*n_seq, 1).view(batch_size, n_seq, self.n_z)	#Replicate z inorder to append same z at each time step
-        if test_phase:
-            x = T.cat([x, y, z], dim=2)
-        else:
-            x = T.cat([x,y[:, :-1, :],z], dim=2)	                                    #Append z to generator word input at each time step
+        x = T.cat([x, y, z], dim=2)
 
         if g_hidden is None:	                                    #if we are validating
             self.init_hidden(batch_size)
@@ -95,7 +92,7 @@ class CVAE(nn.Module):
         self.n_z = opt.n_z
         self.device = T.device(opt.device)
 
-    def forward(self, x, y, G_inp, z = None, G_hidden = None, test_phase = False):
+    def forward(self, x, y, z = None, G_hidden = None):
         if z is None:	                                                #If we are testing with z sampled from random noise
             batch_size, n_seq = x.size()
             x = self.embedding(x)	                                    #Produce embeddings from encoder input
@@ -109,15 +106,13 @@ class CVAE(nn.Module):
         else:
             kld = None                                                  #If we are training with given text
 
-        G_inp = self.embedding(G_inp)	                                #Produce embeddings for generator input
-
-        logit, G_hidden = self.generator(G_inp, y, z, G_hidden, test_phase=test_phase)
+        logit, G_hidden = self.generator(x, y, z, G_hidden)
         return logit, G_hidden, kld
 
     def loss(self, x, y, G_inp, cur_step = 0, is_train=True):
         logit, _, kld = self.forward(x, y, G_inp, None, None)
         logit = logit.view(-1, self.opt.max_words + 4)  # converting into shape (batch_size*(n_seq-1), n_vocab) to facilitate performing F.cross_entropy()
-        x = x[:, 1:x.size(1)]  # target for generator should exclude first word of sequence
+        # x = x[:, 1:x.size(1)]  # target for generator should exclude first word of sequence
         x = x.contiguous().view(-1)  # converting into shape (batch_size*(n_seq-1),1) to facilitate performing F.cross_entropy()
         rec_loss = F.cross_entropy(logit, x)
         kld_coef = (math.tanh((cur_step - 15000) / 1000) + 1) / 2
@@ -158,7 +153,7 @@ class CVAE(nn.Module):
                     break
                 word_count += 1
                 with T.autograd.no_grad():
-                    logit, G_hidden, _ = self.forward(None, features, G_inp, z, G_hidden, test_phase=True)
+                    logit, G_hidden, _ = self.forward(None, features, z, G_hidden)
                 probs = F.softmax(logit[0], dim=1)
                 G_inp = T.multinomial(probs, 1)
                 if vocab.itos[G_inp[0][0].item()] == "<pad>":

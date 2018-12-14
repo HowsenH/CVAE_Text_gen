@@ -12,8 +12,8 @@ def load_model_by_name(model, model_path, global_step):
     model.load_state_dict(state)
     print("Loaded from {}".format(file_path))
 
-def save_model_by_name(model, postfix, global_step):
-    save_dir = os.path.join('checkpoints', "CVAE" + postfix)
+def save_model_by_name(model, global_step):
+    save_dir = os.path.join('checkpoints', "CVAE" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     file_path = os.path.join(save_dir, 'model-{:05d}.pt'.format(global_step))
